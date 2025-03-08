@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kedvezményrendszer - Admin Felület</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .user-list {
+            margin-top: 20px;
+        }
+        .user-item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        input, button, select {
+            margin: 10px 0;
+            padding: 10px;
+            font-size: 16px;
+        }
+        .counter {
+            font-weight: bold;
+            color: green;
+        }
+        .inactive {
+            color: red;
+        }
+        .add-user-form {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Kedvezményrendszer - Admin Felület</h1>
+
+<!-- Kedvezmény kalkulátor -->
+<div class="container">
+    <h2>Kedvezmény Kalkulátor</h2>
+    <input type="number" id="purchaseAmount" placeholder="Írd be az összes költésed (Ft)">
+    <button onclick="updateLevel()">Frissítés</button>
+    <p id="message"></p>
+</div>
+
+<!-- Admin bejelentkezés -->
+<div id="admin-login">
+    <h2>Admin Bejelentkezés</h2>
+    <input type="password" id="admin-password" placeholder="Admin jelszó">
+    <button onclick="loginAdmin()">Bejelentkezés</button>
+</div>
+
+<!-- Admin felület -->
+<div id="admin-panel" class="hidden">
+    <h2>Felhasználók Kezelése</h2>
+
+    <!-- Új felhasználó hozzáadása -->
+    <div class="add-user-form">
+        <h3>Új felhasználó hozzáadása</h3>
+        <input type="text" id="new-user-name" placeholder="Felhasználó neve">
+        <button onclick="addUser()">Hozzáadás</button>
+    </div>
+
+    <!-- Felhasználók listája -->
+    <div class="user-list" id="user-list-container"></div>
+</div>
+
+<script>
+    const levels = [
+        { name: "Új vásárló", discount: 0, threshold: 0 },
+        { name: "Alkalmi gyűjtő", discount: 1, threshold: 10000 },
+        { name: "Hűséges vásárló", discount: 2, threshold: 30000 },
+        { name: "Elkötelezett kártyás", discount: 3, threshold: 60000 },
+        { name: "Profi gyűjtő", discount: 4, threshold: 100000 },
+        { name: "VIP vásárló", discount: 5, threshold: 150000 }
+    ];
+
+    let users = [
+        { id: 1, name: "Felhasználó 1", level: 0, lastPurchase: "2023-10-01", counter: 0 },
+        { id: 2, name: "Felhasználó 2", level: 1, lastPurchase: "2023-09-15", counter: 0 }
+    ];
+
+    const adminPassword = "Valami123";
+
+    function loginAdmin() {
+        const password = document.getElementById("admin-password").value;
+        if (password === adminPassword) {
+            document.getElementById("admin-login").classList.add("hidden");
+            document.getElementById("admin-panel").classList.remove("hidden");
+            loadUserList();
+        } else {
+            alert("Hibás jelszó!");
+        }
+    }
+
+    function loadUserList() {
+        const userListContainer = document.getElementById("user-list-container");
+        userListContainer.innerHTML = "";
+
+        users.forEach(user => {
+            const userItem = document.createElement("div");
+            userItem.className = "user-item";
+
+            // Inaktivitás ellenőrzése (1 hónap)
+            const isInactive = checkInactivity(user.lastPurchase);
+            if (isInactive) {
+                user.counter = 0; // Számláló nullázása, ha inaktív
+            }
+
+            // Felhasználó adatai
+            userItem.innerHTML = `
+                <p><strong>Név:</strong> <input type="text" value="${user.name}" onchange="updateUserName(${user.id}, this.value)"></p>
+                <p><strong>Szint:</strong> 
+                    <select onchange="updateUserLevel(${user.id}, this.value)">
+                        ${levels.map((level, index) => `
+                            <option value="${index}" ${user.level === index ? "selected" : ""}>${level.name} (${level.discount}%)</option>
+                        `).join("")}
+                    </select>
+                </p>
+                <p><strong>Utolsó vásárlás:</strong> ${user.lastPurchase}</p>
+                <p><strong>Állapot:</strong> <span class="${isInactive ? 'inactive' : ''}">${isInactive ? "Inaktív" : "Aktív"}</span></p>
+                <p><strong>Számláló:</strong> <span class="counter">${user.counter}</span></p>
+                <button onclick="startCounter(${user.id})">Számláló indítása</button>
+                <button onclick="deleteUser(${user.id})">Felhasználó törlése</button>
+            `;
+
+            userListContainer.appendChild(userItem);
+        });
+    }
+
+    function checkInactivity(lastPurchase) {
+        const lastPurchaseDate = new Date(lastPurchase);
+        const currentDate = new Date();
+        const diffTime = currentDate - lastPurchaseDate;
+        const diffMonths = diffTime / (1000 * 60 * 60 * 24 * 30); // Milliszekundumból hónapokba
+        return diffMonths > 1; // Ha több mint 1 hónapja nem vásárolt
+    }
+
+    function updateUserLevel(userId, newLevel) {
+        const user = users.find(u => u.id === userId);
+        user.level = parseInt(newLevel);
+        alert("Szint sikeresen frissítve!");
+    }
+
+    function updateUserName(userId, newName) {
+        const user = users.find(u => u.id === userId);
+        user.name = newName;
+        alert("Név sikeresen frissítve!");
+    }
+
+    function startCounter(userId) {
+        const user = users.find(u => u.id === userId);
+        user.lastPurchase = new Date().toISOString().split("T")[0]; // Utolsó vásárlás dátuma frissítése
+        user.counter += 1; // Számláló növelése
+        loadUserList(); // Lista frissítése
+        alert("Számláló indítva!");
+    }
+
+    function addUser() {
+        const newUserName = document.getElementById("new-user-name").value.trim();
+        if (newUserName) {
+            const newUser = {
+                id: users.length + 1, // Új ID generálása
+                name: newUserName,
+                level: 0,
+                lastPurchase: new Date().toISOString().split("T")[0], // Jelenlegi dátum
+                counter: 0,
+            };
+            users.push(newUser); // Új felhasználó hozzáadása
+            loadUserList(); // Lista frissítése
+            document.getElementById("new-user-name").value = ""; // Mező ürítése
+            alert("Új felhasználó hozzáadva!");
+        } else {
+            alert("A név nem lehet üres!");
+        }
+    }
+
+    function deleteUser(userId) {
+        users = users.filter(u => u.id !== userId); // Felhasználó törlése
+        loadUserList(); // Lista frissítése
+        alert("Felhasználó törölve!");
+    }
+
+    function updateLevel() {
+        let purchaseAmount = parseInt(document.getElementById("purchaseAmount").value) || 0;
+        let newLevel = levels[0];
+        
+        for (let level of levels) {
+            if (purchaseAmount >= level.threshold) {
+                newLevel = level;
+            }
+        }
+        
+        document.getElementById("message").innerText = `Elért szint: ${newLevel.name} - ${newLevel.discount}% kedvezmény`;
+    }
+</script>
+
+</body>
+</html>
