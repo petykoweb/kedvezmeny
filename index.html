@@ -78,6 +78,11 @@
         <button onclick="addUser()">Hozzáadás</button>
     </div>
 
+    <!-- Adatok letöltése -->
+    <div class="download-section">
+        <button onclick="downloadData()">Adatok letöltése (CSV)</button>
+    </div>
+
     <!-- Felhasználók listája -->
     <div class="user-list" id="user-list-container"></div>
 </div>
@@ -92,12 +97,18 @@
         { name: "VIP vásárló", discount: 5, threshold: 150000 }
     ];
 
-    let users = [
-        { id: 1, name: "Felhasználó 1", level: 0, lastPurchase: "2023-10-01", counter: 0 },
-        { id: 2, name: "Felhasználó 2", level: 1, lastPurchase: "2023-09-15", counter: 0 }
+    const adminPassword = "Valami123";
+
+    // Felhasználók betöltése a LocalStorage-ból
+    let users = JSON.parse(localStorage.getItem("users")) || [
+        { id: 1, name: "Felhasználó 1", level: 0, lastPurchase: "2023-10-01", counter: 0, totalSpent: 0, isPermanentLevel1: false },
+        { id: 2, name: "Felhasználó 2", level: 1, lastPurchase: "2023-09-15", counter: 0, totalSpent: 0, isPermanentLevel1: false }
     ];
 
-    const adminPassword = "Valami123";
+    // Felhasználók mentése a LocalStorage-ba
+    function saveUsers() {
+        localStorage.setItem("users", JSON.stringify(users));
+    }
 
     function loginAdmin() {
         const password = document.getElementById("admin-password").value;
@@ -137,6 +148,8 @@
                 <p><strong>Utolsó vásárlás:</strong> ${user.lastPurchase}</p>
                 <p><strong>Állapot:</strong> <span class="${isInactive ? 'inactive' : ''}">${isInactive ? "Inaktív" : "Aktív"}</span></p>
                 <p><strong>Számláló:</strong> <span class="counter">${user.counter}</span></p>
+                <p><strong>Összes költés:</strong> ${user.totalSpent} Ft</p>
+                ${user.isPermanentLevel1 ? `<p><strong>Státusz:</strong> Örök 1. szint</p>` : ''}
                 <button onclick="startCounter(${user.id})">Számláló indítása</button>
                 <button onclick="deleteUser(${user.id})">Felhasználó törlése</button>
             `;
@@ -156,21 +169,53 @@
     function updateUserLevel(userId, newLevel) {
         const user = users.find(u => u.id === userId);
         user.level = parseInt(newLevel);
+        saveUsers(); // Mentés a LocalStorage-ba
         alert("Szint sikeresen frissítve!");
     }
 
     function updateUserName(userId, newName) {
         const user = users.find(u => u.id === userId);
         user.name = newName;
+        saveUsers(); // Mentés a LocalStorage-ba
         alert("Név sikeresen frissítve!");
     }
 
     function startCounter(userId) {
         const user = users.find(u => u.id === userId);
-        user.lastPurchase = new Date().toISOString().split("T")[0]; // Utolsó vásárlás dátuma frissítése
-        user.counter += 1; // Számláló növelése
-        loadUserList(); // Lista frissítése
-        alert("Számláló indítva!");
+        const amountSpent = prompt("Add meg a felhasználó által költött összeget (Ft):");
+        if (amountSpent && !isNaN(amountSpent)) {
+            user.lastPurchase = new Date().toISOString().split("T")[0]; // Utolsó vásárlás dátuma frissítése
+            user.counter += 1; // Számláló növelése
+            user.totalSpent += parseInt(amountSpent); // Összes költés frissítése
+
+            // Szint frissítése break-ek alapján
+            updateLevelBasedOnBreaks(user);
+
+            saveUsers(); // Mentés a LocalStorage-ba
+            loadUserList(); // Lista frissítése
+            alert("Számláló indítva és költés hozzáadva!");
+        } else {
+            alert("Érvénytelen összeg!");
+        }
+    }
+
+    function updateLevelBasedOnBreaks(user) {
+        if (user.counter >= 60) {
+            user.level = 5; // 60 break: 5. szint
+        } else if (user.counter >= 50) {
+            user.level = 4; // 50 break: 4. szint
+        } else if (user.counter >= 40) {
+            user.level = 3; // 40 break: 3. szint
+        } else if (user.counter >= 30) {
+            user.level = 2; // 30 break: 2. szint
+        } else if (user.counter >= 20) {
+            user.level = 1; // 20 break: Örök 1. szint
+            user.isPermanentLevel1 = true; // Jelöljük, hogy elérte az örök 1. szintet
+        } else if (user.counter >= 10) {
+            if (!user.isPermanentLevel1) { // Csak akkor frissítjük, ha még nem érte el az örök 1. szintet
+                user.level = 1; // 10 break: 1. szint
+            }
+        }
     }
 
     function addUser() {
@@ -182,8 +227,11 @@
                 level: 0,
                 lastPurchase: new Date().toISOString().split("T")[0], // Jelenlegi dátum
                 counter: 0,
+                totalSpent: 0,
+                isPermanentLevel1: false,
             };
             users.push(newUser); // Új felhasználó hozzáadása
+            saveUsers(); // Mentés a LocalStorage-ba
             loadUserList(); // Lista frissítése
             document.getElementById("new-user-name").value = ""; // Mező ürítése
             alert("Új felhasználó hozzáadva!");
@@ -194,6 +242,7 @@
 
     function deleteUser(userId) {
         users = users.filter(u => u.id !== userId); // Felhasználó törlése
+        saveUsers(); // Mentés a LocalStorage-ba
         loadUserList(); // Lista frissítése
         alert("Felhasználó törölve!");
     }
@@ -210,6 +259,40 @@
         
         document.getElementById("message").innerText = `Elért szint: ${newLevel.name} - ${newLevel.discount}% kedvezmény`;
     }
+
+    // Adatok letöltése CSV formátumban
+    function downloadData() {
+        let csvContent = "data:text/csv;charset=utf-8,";
+        
+        // CSV fejléc
+        csvContent += "ID,Név,Szint,Utolsó vásárlás,Számláló,Összes költés,Örök 1. szint\n";
+        
+        // Adatok hozzáadása
+        users.forEach(user => {
+            const row = [
+                user.id,
+                user.name,
+                levels[user.level].name,
+                user.lastPurchase,
+                user.counter,
+                user.totalSpent,
+                user.isPermanentLevel1 ? "Igen" : "Nem"
+            ].join(",");
+            csvContent += row + "\n";
+        });
+
+        // Fájl létrehozása és letöltése
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "felhasznalok.csv");
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Betöltéskor frissíti a felhasználók listáját
+    loadUserList();
 </script>
 
 </body>
